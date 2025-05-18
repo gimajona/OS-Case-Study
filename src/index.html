@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Page Replacement Simulator - Interactive</title>
+<style>
+  /* Base styles */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #121212;
+    color: #e0e0e0;
+    margin: 0;
+    padding: 2rem;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .container {
+    max-width: 900px;
+    width: 100%;
+    background: #1e1e1e;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 0 20px #27ae60aa;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  h1 {
+    text-align: center;
+    color: #27ae60;
+    margin: 0 0 1rem 0;
+    user-select: none;
+  }
+  /* Controls */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+    align-items: center;
+  }
+  label {
+    font-weight: 600;
+    margin-right: 0.5rem;
+    user-select: none;
+  }
+  input[type=number] {
+    width: 60px;
+    padding: 0.3rem;
+    border-radius: 6px;
+    border: none;
+    font-size: 1rem;
+    text-align: center;
+  }
+  button {
+    background: #27ae60;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1.2rem;
+    color: #121212;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 0 8px #27ae60aa;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+    user-select: none;
+  }
+  button:hover:not(:disabled),
+  button:focus:not(:disabled) {
+    background: #2ecc71;
+    box-shadow: 0 0 14px #2ecc71cc;
+    outline: none;
+  }
+  button:disabled {
+    background: #555;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  /* Page reference queue */
+  .page-queue {
+    background: #222;
+    border-radius: 8px;
+    padding: 0.5rem;
+    display: flex;
+    gap: 0.3rem;
+    overflow-x: auto;
+    user-select: none;
+    scrollbar-width: thin;
+    scrollbar-color: #27ae60 #121212;
+  }
+  .page-queue::-webkit-scrollbar {
+    height: 8px;
+  }
+  .page-queue::-webkit-scrollbar-track {
+    background: #121212;
+  }
+  .page-queue::-webkit-scrollbar-thumb {
+    background-color: #27ae60;
+    border-radius: 4px;
+  }
+  .page-item {
+    background: #333;
+    min-width: 32px;
+    height: 32px;
+    line-height: 32px;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #aaa;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  .page-item.current {
+    background: #27ae60;
+    color: #121212;
+    box-shadow: 0 0 8px #27ae60cc;
+  }
+  /* Page frames container */
+  .frames-container {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .frame {
+    width: 60px;
+    height: 60px;
+    border: 3px solid #444;
+    border-radius: 10px;
+    background: #222;
+    color: #aaa;
+    font-weight: 700;
+    font-size: 1.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    transition: border-color 0.4s ease, background-color 0.4s ease;
+  }
+  .frame.filled {
+    border-color: #27ae60;
+    background-color: #145a32;
+    color: #d4f8d4;
+    box-shadow: 0 0 12px #27ae60cc;
+  }
+  .frame.hit {
+    animation: pulseGreen 0.8s ease forwards;
+  }
+  .frame.fault {
+    animation: flashRed 0.8s ease forwards;
+  }
+  @keyframes pulseGreen {
+    0% { box-shadow: 0 0 12px #27ae60cc; }
+    50% { box-shadow: 0 0 22px #2ecc71ff; }
+    100% { box-shadow: 0 0 12px #27ae60cc; }
+  }
+  @keyframes flashRed {
+    0%, 100% { border-color: #e74c3c; background-color: #641e16; }
+    50% { border-color: #ff6659; background-color: #a73b2d; }
+  }
+  /* Page fault counter */
+  .fault-counter {
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #e74c3c;
+    user-select: none;
+    margin-top: 1rem;
+  }
+  .fault-counter.flash {
+    animation: flashRedCounter 0.8s ease forwards;
+  }
+  @keyframes flashRedCounter {
+    0%, 100% { color: #e74c3c; }
+    50% { color: #ff6659; }
+  }
+  /* Progress bar */
+  .progress-container {
+    margin-top: 1rem;
+    background: #333;
+    border-radius: 10px;
+    height: 12px;
+    width: 100%;
+    box-shadow: inset 0 0 8px #000;
+  }
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: #27ae60;
+    border-radius: 10px;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 12px #27ae60cc;
+  }
+  /* Play/Pause and Step Buttons container */
+  .playback-controls {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .playback-controls button {
+    min-width: 80px;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+  }
+  /* Algorithm selector */
+  .algo-selector {
+    margin-top: 1rem;
+    text-align: center;
+  }
+  .algo-selector label {
+    margin: 0 1rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  input[type=radio] {
+    margin-right: 0.3rem;
+    cursor: pointer;
+  }
+  /* Responsive */
+  @media (max-width: 600px) {
+    .frames-container {
+      justify-content: center;
+    }
+    .frame {
+      width: 50px;
+      height: 50px;
+      font-size: 1.2rem;
+    }
+    .page-item {
+      min-width: 28px;
+      height: 28px;
+      line-height: 28px;
+      font-size: 1rem;
+    }
+    .controls {
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+    .playback-controls {
+      gap: 0.3rem;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="container" role="main" aria-label="Page Replacement Simulator">
+  <h1>Page Replacement Simulator</h1>
+
+  <div class="controls" aria-label="Simulation controls">
+    <label for="framesInput">Frames:</label>
+    <input type="number" id="framesInput" min="1" max="10" value="3" aria-describedby="framesHelp" />
+    <span id="framesHelp" style="display:none;">Number of page frames</span>
+
+    <div class="algo-selector" role="radiogroup" aria-label="Algorithm selector">
+      <label><input type="radio" name="algorithm" value="FIFO" checked /> FIFO</label>
+      <label><input type="radio" name="algorithm" value="LRU" /> LRU</label>
+      <label><input type="radio" name="algorithm" value="OPT" /> Optimal</label>
+    </div>
+
+    <button id="startBtn" aria-label="Start simulation">Start</button>
+  </div>
+
+  <div class="page-queue" aria-label="Page reference string">
+    <!-- Page references will appear here -->
+  </div>
+
+  <div class="frames-container" aria-label="Page frames">
+    <!-- Page frames will appear here -->
+  </div>
+
+  <div class="fault-counter" aria-live="polite" aria-atomic="true" id="faultCounter">
+    Page Faults: 0
+  </div>
+
+  <div class="progress-container" aria-label="Simulation progress">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <div class="playback-controls" aria-label="Playback controls">
+    <button id="prevBtn" aria-label="Previous step" disabled>Prev</button>
+    <button id="playPauseBtn" aria-label="Play simulation">Play</button>
+    <button id="nextBtn" aria-label="Next step" disabled>Next</button>
+  </div>
+</div>
+
+<script>
+  const startBtn = document.getElementById('startBtn');
+  const playPauseBtn = document.getElementById('playPauseBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const framesInput = document.getElementById('framesInput');
+  const pageQueueDiv = document.querySelector('.page-queue');
+  const framesContainer = document.querySelector('.frames-container');
+  const faultCounter = document.getElementById('faultCounter');
+  const progressBar = document.getElementById('progressBar');
+  const algoRadios = document.querySelectorAll('input[name="algorithm"]');
+
+  let pages = [];
+  let framesCount = 3;
+  let algorithm = 'FIFO';
+  let steps = [];
+  let currentStep = 0;
+  let intervalId = null;
+  let playing = false;
+  const speed = 1000; // ms per step
+
+  function generatePages(length=20) {
+    const arr = [];
+    for(let i=0; i<length; i++) {
+      arr.push(Math.floor(Math.random()*10));
+    }
+    return arr;
+  }
+
+  function fifo(pages, framesCount) {
+    const frames = [];
+    const steps = [];
+    let pointer = 0;
+    for (const page of pages) {
+      const hit = frames.includes(page);
+      if (!hit) {
+        if (frames.length < framesCount) {
+          frames.push(page);
+        } else {
+          frames[pointer] = page;
+          pointer = (pointer + 1) % framesCount;
+        }
+      }
+      steps.push({ frames: [...frames], page, fault: !hit });
+    }
+    return steps;
+  }
+
+  function lru(pages, framesCount) {
+    const frames = [];
+    const steps = [];
+    for (const page of pages) {
+      const index = frames.indexOf(page);
+      const hit = index !== -1;
+      if (!hit) {
+        if (frames.length < framesCount) {
+          frames.push(page);
+        } else {
+          frames.shift();
+          frames.push(page);
+        }
+      } else {
+        frames.splice(index, 1);
+        frames.push(page);
+      }
+      steps.push({ frames: [...frames], page, fault: !hit });
+    }
+    return steps;
+  }
+
+  function optimal(pages, framesCount) {
+    const frames = [];
+    const steps = [];
+    for(let i=0; i<pages.length; i++) {
+      const page = pages[i];
+      const hit = frames.includes(page);
+      if(!hit) {
+        if(frames.length < framesCount) {
+          frames.push(page);
+        } else {
+          let indexToReplace = -1;
+          let farthestUse = -1;
+          for(let j=0; j<frames.length; j++) {
+            const framePage = frames[j];
+            const nextUse = pages.slice(i+1).indexOf(framePage);
+            if(nextUse === -1) {
+              indexToReplace = j;
+              break;
+            } else if(nextUse > farthestUse) {
+              farthestUse = nextUse;
+              indexToReplace = j;
+            }
+          }
+          frames[indexToReplace] = page;
+        }
+      }
+      steps.push({ frames: [...frames], page, fault: !hit });
+    }
+    return steps;
+  }
+
+  function renderPageQueue(currentIndex) {
+    pageQueueDiv.innerHTML = '';
+    pages.forEach((p, i) => {
+      const div = document.createElement('div');
+      div.classList.add('page-item');
+      if(i === currentIndex) div.classList.add('current');
+      div.textContent = p;
+      pageQueueDiv.appendChild(div);
+    });
+  }
+
+  function renderFrames(frames, highlightType) {
+    framesContainer.innerHTML = '';
+    for(let i=0; i<framesCount; i++) {
+      const div = document.createElement('div');
+      div.classList.add('frame');
+      if(frames[i] !== undefined) {
+        div.textContent = frames[i];
+        div.classList.add('filled');
+        if(highlightType === 'hit') div.classList.add('hit');
+        if(highlightType === 'fault') div.classList.add('fault');
+      }
+      framesContainer.appendChild(div);
+    }
+  }
+
+  function updateFaultCounter(count, flash=false) {
+    faultCounter.textContent = `Page Faults: ${count}`;
+    if(flash) {
+      faultCounter.classList.add('flash');
+      setTimeout(() => faultCounter.classList.remove('flash'), 800);
+    }
+  }
+
+  function updateProgressBar(step) {
+    const percent = ((step+1)/steps.length)*100;
+    progressBar.style.width = percent + '%';
+  }
+
+  function updateUI(stepIndex) {
+    const step = steps[stepIndex];
+    renderPageQueue(stepIndex);
+    renderFrames(step.frames, step.fault ? 'fault' : 'hit');
+    updateFaultCounter(steps.slice(0, stepIndex+1).filter(s => s.fault).length, step.fault);
+    updateProgressBar(stepIndex);
+  }
+
+  function resetUI() {
+    renderPageQueue(-1);
+    framesContainer.innerHTML = '';
+    faultCounter.textContent = 'Page Faults: 0';
+    progressBar.style.width = '0%';
+  }
+
+  function startSimulation() {
+    if(playing) return;
+    playing = true;
+    playPauseBtn.textContent = 'Pause';
+    startBtn.disabled = true;
+    prevBtn.disabled = currentStep === 0;
+    nextBtn.disabled = currentStep === steps.length - 1;
+    intervalId = setInterval(() => {
+      if(currentStep >= steps.length - 1) {
+        pauseSimulation();
+        return;
+      }
+      currentStep++;
+      updateUI(currentStep);
+      prevBtn.disabled = false;
+      nextBtn.disabled = currentStep === steps.length -1;
+    }, speed);
+  }
+
+  function pauseSimulation() {
+    playing = false;
+    playPauseBtn.textContent = 'Play';
+    startBtn.disabled = false;
+    clearInterval(intervalId);
+  }
+
+  function togglePlayPause() {
+    if(playing) pauseSimulation();
+    else startSimulation();
+  }
+
+  function prevStep() {
+    if(currentStep <= 0) return;
+    currentStep--;
+    updateUI(currentStep);
+    nextBtn.disabled = false;
+    prevBtn.disabled = currentStep === 0;
+  }
+
+  function nextStep() {
+    if(currentStep >= steps.length -1) return;
+    currentStep++;
+    updateUI(currentStep);
+    prevBtn.disabled = false;
+    nextBtn.disabled = currentStep === steps.length -1;
+  }
+
+  startBtn.addEventListener('click', () => {
+    framesCount = parseInt(framesInput.value, 10);
+    if(isNaN(framesCount) || framesCount < 1 || framesCount > 10) {
+      alert("Please enter a valid number of frames (1-10).");
+      framesInput.focus();
+      return;
+    }
+    const selectedAlgo = [...algoRadios].find(r => r.checked);
+    algorithm = selectedAlgo ? selectedAlgo.value : 'FIFO';
+
+    pages = generatePages(20);
+    switch(algorithm) {
+      case 'FIFO': steps = fifo(pages, framesCount); break;
+      case 'LRU': steps = lru(pages, framesCount); break;
+      case 'OPT': steps = optimal(pages, framesCount); break;
+      default: steps = fifo(pages, framesCount);
+    }
+    currentStep = 0;
+    resetUI();
+    updateUI(currentStep);
+    startSimulation();
+  });
+
+  playPauseBtn.addEventListener('click', togglePlayPause);
+  prevBtn.addEventListener('click', prevStep);
+  nextBtn.addEventListener('click', nextStep);
+
+  resetUI();
+</script>
+
+</body>
+</html>
